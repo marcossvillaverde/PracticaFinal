@@ -13,7 +13,8 @@ export async function searchArtists(query) {
     });
     if (!response.ok) return [];
     const data = await response.json();
-    return data.artists.items;
+    // Protección extra: asegurar que data.artists existe
+    return data.artists ? data.artists.items : [];
   } catch (error) {
     console.error(error);
     return [];
@@ -83,33 +84,37 @@ export async function generatePlaylist(preferences) {
       });
       const featureData = await featureResponse.json();
       
-      // Crear un mapa de características para acceso rápido
       const featuresMap = {};
-      featureData.audio_features.forEach(f => {
-        if (f) featuresMap[f.id] = f;
-      });
+      
+      // --- AQUÍ ESTABA EL ERROR ---
+      // Añadimos comprobación: if (featureData.audio_features)
+      if (featureData && featureData.audio_features) {
+        featureData.audio_features.forEach(f => {
+          if (f) featuresMap[f.id] = f;
+        });
 
-      // Filtrar tracks basándonos en los sliders (+- 20% de tolerancia)
-      allTracks = allTracks.filter(track => {
-        const f = featuresMap[track.id];
-        if (!f) return false;
+        // Filtrar tracks basándonos en los sliders (+- 25% de tolerancia)
+        allTracks = allTracks.filter(track => {
+          const f = featuresMap[track.id];
+          if (!f) return false;
 
-        // Convertimos el slider (0-100) a escala de API (0.0-1.0)
-        const targetEnergy = mood.energy / 100;
-        const targetValence = mood.valence / 100;
-        const targetDance = mood.danceability / 100;
-        const tolerance = 0.25; // Margen de error flexible
+          const targetEnergy = mood.energy / 100;
+          const targetValence = mood.valence / 100;
+          const targetDance = mood.danceability / 100;
+          const tolerance = 0.25;
 
-        const matchEnergy = Math.abs(f.energy - targetEnergy) <= tolerance;
-        const matchValence = Math.abs(f.valence - targetValence) <= tolerance;
-        const matchDance = Math.abs(f.danceability - targetDance) <= tolerance;
+          const matchEnergy = Math.abs(f.energy - targetEnergy) <= tolerance;
+          const matchValence = Math.abs(f.valence - targetValence) <= tolerance;
+          const matchDance = Math.abs(f.danceability - targetDance) <= tolerance;
 
-        // Deben coincidir al menos 2 de 3 características para ser flexibles
-        return [matchEnergy, matchValence, matchDance].filter(Boolean).length >= 2;
-      });
+          return [matchEnergy, matchValence, matchDance].filter(Boolean).length >= 2;
+        });
+      }
+      // ----------------------------
 
     } catch (e) {
       console.error("Error filtrando por mood:", e);
+      // Si falla el mood, no hacemos nada y devolvemos la lista sin filtrar por mood
     }
   }
 
